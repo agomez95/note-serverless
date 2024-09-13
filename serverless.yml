@@ -1,0 +1,76 @@
+service: note
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:*
+      Resource:
+        - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/NoteTable
+    - Effect: Allow
+      Action:
+        - cognito-idp:*
+      Resource:
+        - !Sub arn:aws:cognito-idp:${self:provider.region}:${aws:accountId}:userpool/${CognitoUserPool}
+  environment:
+    COGNITO_CLIENT_ID:
+      Ref: CognitoUserPoolClient
+    COGNITO_USER_POOL_ID:
+      Ref: CognitoUserPool
+
+custom:
+  userPoolId: { Ref: CognitoUserPool }
+
+functions:
+  register:
+    handler: src/register.register
+    events:
+      - httpApi:
+          path: /signup
+          method: post
+  login:
+    handler: src/login.login
+    events:
+      - httpApi:
+          path: /signin
+          method: post
+
+resources:
+  Resources:
+    NoteTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: NoteTable
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH 
+    CognitoUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: NoteAppUserPoolName
+        Schema:
+          - Name: email
+            AttributeDataType: String
+            Mutable: true
+            Required: true
+        Policies:
+          PasswordPolicy: 
+            MinimumLength: 8
+    CognitoUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: noteAppUserPoolClient
+        GenerateSecret: false
+        UserPoolId:
+          Ref: CognitoUserPool
+        ExplicitAuthFlows:
+          - USER_PASSWORD_AUTH
+        # RefreshTokenValidity: 30 # Duración del token de actualización en días
